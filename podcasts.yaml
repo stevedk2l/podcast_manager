@@ -1,0 +1,194 @@
+bitrate: 24k
+format: opus
+podcasts:
+- podcast:
+    feed: https://rss.podplaystudio.com/1308.xml
+    name: The_Frank_Skinner_Show
+- podcast:
+    feed: https://rss.acast.com/wolf-and-owl
+    name: The_Wolf_And_Owl
+- podcast:
+    feed: https://audioboom.com/channels/5045549.rss
+    name: General_Banter_Podcast
+- podcast:
+    feed: https://rss.hosting.thisisdax.com/073b3981-2bd6-4eea-be01-d3a9c85d52f3
+    name: The_Paul_Chowdhry_PudCast
+- podcast:
+    feed: https://feeds.buzzsprout.com/1107182.rss
+    name: Up_On_The_Lookout_-_The_Dragon_Ball_Podcast
+- podcast:
+    feed: https://anchor.fm/s/123de8e0/podcast/rss
+    name: Mindfulness_For_Beginners
+- podcast:
+    feed: https://anchor.fm/s/41be58c0/podcast/rss
+    name: The_Brian_Butterfield_Pod-Pod-Podcast
+- podcast:
+    feed: https://rss.acast.com/abroadinjapan
+    name: Abroad_in_Japan
+- podcast:
+    feed: https://dbsuperdope.libsyn.com/DBSUPERDOPE
+    name: Dragon_Ball_Super_Dope
+- podcast:
+    feed: https://audioboom.com/channels/2399216.rss
+    name: No_Such_Thing_As_A_Fish
+- podcast:
+    feed: https://feeds.soundcloud.com/users/soundcloud:users:831941296/sounds.rss
+    name: Talking_Dogs_with_Graeme_Hall
+- podcast:
+    feed: https://feeds.megaphone.fm/davidtennant
+    name: "David_Tennant_Does_a_Podcast_With\u2026"
+- podcast:
+    feed: https://www.spreaker.com/show/3367994/episodes/feed
+    name: 7_Good_Minutes_Daily_Self-Improvement_Podcast
+- podcast:
+    feed: https://anchor.fm/s/7cd100c/podcast/rss
+    name: I_am._I_have
+- podcast:
+    feed: https://rss.acast.com/chatabix
+    name: Chatabix
+- podcast:
+    feed: https://podcast.global.com/show/4953724/episodes/feed
+    name: The_Wim_Hof_Podcast
+- podcast:
+    feed: https://rss.acast.com/athleticomince
+    name: Athletico_Mince
+- podcast:
+    feed: https://podcasts.files.bbci.co.uk/p01f0vzr.rss
+    name: In_Our_Time:_Philosophy
+- podcast:
+    feed: http://rss.acast.com/alandaviesasyetuntitled
+    name: Alan_Davies_As_Yet_Untitled
+- podcast:
+    feed: http://tarabrach.libsyn.com/rss
+    name: Tara_Brach
+- podcast:
+    feed: https://feeds.megaphone.fm/radio-headspace
+    name: Radio_Headspace
+- podcast:
+    feed: https://rss.acast.com/happy-place
+    name: Happy_Place
+- podcast:
+    feed: http://rss.acast.com/adambuxton
+    name: THE_ADAM_BUXTON_PODCAST
+- podcast:
+    feed: https://feeds.acast.com/public/shows/3de6285f-ec4c-4217-adce-1a7b3f5c6b24
+    name: Hip_Hop_Saved_My_Life_with_Romesh_Ranganathan
+- podcast:
+    feed: https://podcasts.files.bbci.co.uk/p089sfrz.rss
+    name: Grounded_with_Louis_Theroux
+- podcast:
+    feed: https://feeds.megaphone.fm/somethingrhymeswithpurple
+    name: Something_Rhymes_with_Purple
+- podcast:
+    feed: https://podcasts.files.bbci.co.uk/p01gyd7j.rss
+    name: In_Our_Time:_Science
+- podcast:
+    feed: https://rss.acast.com/katherine-ryan-telling-everybody-everything
+    name: Katherine_Ryan:_Telling_Everybody_Everything
+- podcast:
+    feed: https://podcasts.files.bbci.co.uk/b00snr0w.rss
+    name: The_Infinite_Monkey_Cage
+- podcast:
+    feed: https://rss.acast.com/offmenu
+    name: Off_Menu_with_Ed_Gamble_and_James_Acaster
+- podcast:
+    feed: https://feeds.transistor.fm/technology-untangled
+    name: Technology_Untangled
+- podcast:
+    feed: https://ffkhunion.libsyn.com/rss
+    name: Final_Fantasy_&_Kingdom_Hearts_Union
+- podcast:
+    feed: https://www.omnycontent.com/d/playlist/70c29b83-2530-498a-a67e-ad580005660a/30426675-fec3-4be0-a4d9-ad580047f95c/18b9a525-2843-4a02-bb78-ad580047f978/podcast.rss
+    name: Nothing_much_happens;_bedtime_stories_to_help_you_sleep
+- podcast:
+    feed: https://feeds.acast.com/public/shows/6e20a542-2317-542c-9bc9-8431d817ef21
+    name: Isy_Suttie's_The_Things_We_Do_For_Love
+- podcast:
+    feed: https://podcast.global.com/show/4953192/episodes/feed
+    name: Seven_Pillars_with_Alan_Davies
+- podcast:
+    feed: https://feeds.buzzsprout.com/1473463.rss
+    name: The_Dansg08_Podcast
+- podcast:
+    feed: https://podcasts.files.bbci.co.uk/p02nrss1.rss
+    name: More_or_Less:_Behind_the_Stats
+- podcast:
+    feed: https://podcasts.files.bbci.co.uk/p07shc5x.rss
+    name: Scientifically...
+- podcast:
+    feed: https://audioboom.com/channels/4998550.rss
+    name: Sex_Power_Money_with_Sara_Pascoe
+- podcast:
+    feed: https://podcasts.files.bbci.co.uk/p0605sx6.rss
+    name: Evil_Genius_with_Russell_Kane
+- podcast:
+    feed: https://rss.acast.com/gossipmongers
+    name: GOSSIPMONGERS
+- podcast:
+    feed: http://rss.acast.com/rhlstp
+    name: RHLSTP_with_Richard_Herring
+- podcast:
+    feed: https://feeds.fireside.fm/growthmindset/rss
+    name: Growth_Mindset_Podcast
+- podcast:
+    feed: https://anchor.fm/s/3cbbb3b8/podcast/rss
+    name: The_WAN_Show
+- podcast:
+    feed: https://www.theguardian.com/news/series/todayinfocus/podcast.xml
+    name: Today_in_Focus
+- podcast:
+    feed: https://rss.acast.com/sma
+    name: Sh**ged_Married_Annoyed
+- podcast:
+    feed: https://feeds.simplecast.com/IXxBBvKz
+    name: Get_Sleepy:_Sleep_meditation_and_stories
+- podcast:
+    feed: https://tinpotradio.org/feed/xfm-the-ricky-gervais-show.rss
+    name: tinpotradio.org:_XFM_The_Ricky_Gervais_Show
+- podcast:
+    feed: https://podcast.global.com/show/4763192/episodes/feed
+    name: Alan_Carr's_'Life's_a_Beach'
+- podcast:
+    feed: https://podcast.global.com/show/4467873/episodes/feed
+    name: Jon_Richardson_and_the_Futurenauts_-_How_To_Survive_The_Future
+- podcast:
+    feed: https://rss.hosting.thisisdax.com/90a34def-1ba6-4d2d-9cf3-f93cdd465c78
+    name: I_Can't_Believe_It's_Not_Buddha_with_Lee_Mack_&_Neil_Webster
+- podcast:
+    feed: http://rss.acast.com/mydadwroteaporno
+    name: My_Dad_Wrote_A_Porno
+- podcast:
+    feed: https://feed.podbean.com/tinpodcast/feed.xml
+    name: Therapy_in_a_Nutshell
+- podcast:
+    feed: https://rss.acast.com/walkingthedog
+    name: Walking_The_Dog_with_Emily_Dean
+- podcast:
+    feed: https://feeds.acast.com/public/shows/ed58a27b-67ad-4075-b336-1b05428be65f
+    name: Poppy_Hillstead_Has_Entered_The_Chat
+- podcast:
+    feed: https://podcast.global.com/show/4467866/episodes/feed
+    name: Rob_Beckett_and_Josh_Widdicombe's_Parenting_Hell
+- podcast:
+    feed: http://feeds.feedburner.com/WaveformWithMkbhd
+    name: Waveform:_The_MKBHD_Podcast
+- podcast:
+    feed: https://podcasts.files.bbci.co.uk/p089rfmk.rss
+    name: James_Acaster's_Perfect_Sounds
+- podcast:
+    feed: https://rss.acast.com/the-taskmaster-podcast
+    name: Taskmaster_The_Podcast
+- podcast:
+    feed: https://rss.acast.com/greatleapyears
+    name: Stephen_Fry's_7_Deadly_Sins
+- podcast:
+    feed: https://anchor.fm/s/be014f0/podcast/rss
+    name: The_Anxious_Truth_-_REAL_Help_For_Panic,_Anxiety_and_Agoraphobia
+- podcast:
+    feed: https://feeds.acast.com/public/shows/d8202d2d-a27f-4766-8750-27640a9f344f
+    name: Wolf_and_Owl
+- podcast:
+    feed: https://astronomycast.libsyn.com/rss
+    name: Astronomy_Cast
+root_path: ~/podcasts/
+search_interval: 180
