@@ -96,6 +96,7 @@ class PodcastEpisode:
         self.released: int = ep['published']
         self.url: str = ep['enclosures'][0]['url']
         self.tempfile: tempfile.NamedTemporaryFile = tempfile.NamedTemporaryFile(delete=False)
+        self.tempfile.close()
         self.guid: str = ep['guid']
         self._requested_format, self._requested_bitrate = get_req_info()
 
@@ -163,7 +164,7 @@ class PodcastEpisode:
         logging.debug(msg=f"Downloading episode: {self}")
         response = requests.get(self.url, stream=True)
 
-        with self.tempfile as handle:
+        with open(self.tempfile.name, 'wb') as handle:
             for data in response.iter_content(chunk_size=102400):
                 handle.write(data)
         logging.debug(msg=f"Downloaded episode: {self}")

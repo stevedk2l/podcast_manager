@@ -190,5 +190,5 @@ podcasts:
 - podcast:
     feed: https://astronomycast.libsyn.com/rss
     name: Astronomy_Cast
-root_path: ~/podcasts/
+root_path: /mnt/Export/Audio/podcasts/
 search_interval: 180
