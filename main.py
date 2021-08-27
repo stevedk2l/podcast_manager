@@ -10,7 +10,9 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import as_completed
 from functools import lru_cache
 from logging import config
+from typing import Dict
 from typing import List
+from typing import Tuple
 from typing import Union
 from urllib.error import HTTPError
 from urllib.request import Request
@@ -19,7 +21,7 @@ from xml.etree import ElementTree
 import certifi
 import ffmpeg
 import podcastparser
-import pymediainfo as pymediainfo
+import pymediainfo
 import requests
 import yaml
 from box import Box
@@ -85,7 +87,7 @@ def parse_size(size) -> int:
 
 
 @lru_cache(maxsize=1)
-def get_req_info():
+def get_req_info() -> Tuple[str, int]:
     return CONFIG.format, parse_size(CONFIG.bitrate)
 
 
@@ -104,15 +106,15 @@ class PodcastEpisode:
                                      self.podcast.title,
                                      f"{self.podcast.title}__{self.released}__{self.name}.{self._requested_format}")
 
-        self._completed = os.path.exists(self.filepath)
+        self.completed = os.path.exists(self.filepath)
 
-        if self._completed:
+        if self.completed:
             self.format, self.bitrate = self.collect_audio_metadata()
             req_format, req_bitrate = get_req_info()
             if not ((self.format.lower() == req_format.lower()) or (
                     req_bitrate * 0.9 <= self.bitrate <= req_bitrate * 1.1)):
                 logging.warning(f"Deleting: {self} as it doesn't match format and/or bitrate rules")
-                self._completed = False
+                self.completed = False
                 logging.info(f"Marking: {self} as not complete")
                 os.remove(self.filepath)
         else:
@@ -169,7 +171,7 @@ class PodcastEpisode:
                 handle.write(data)
         logging.debug(msg=f"Downloaded episode: {self}")
 
-    def collect_audio_metadata(self) -> (str, str):
+    def collect_audio_metadata(self) -> Union[Tuple[str, str], Tuple[None, None]]:
         try:
             meta = pymediainfo.MediaInfo.parse(self.filepath)
             return meta.general_tracks[0].audio_codecs, meta.general_tracks[0].overall_bit_rate
@@ -177,16 +179,16 @@ class PodcastEpisode:
             return None, None
 
     def do_it(self):
-        if self.podcast == "" or self._completed:
+        if self.podcast == "" or self.completed:
             logging.debug(msg=f"No need to process this podcast episode: {self}")
             return
         self._create_folder()
         self.download()
         self.convert()
-        self._completed = True
+        self.completed = True
 
 
-def load_config():
+def load_config() -> Dict:
     with open("podcasts.yaml", "r") as conf:
         return yaml.safe_load(conf)
 
@@ -199,13 +201,13 @@ def store_config(config):
     CONFIG = Box(config)
 
 
-def create_podcast(feed):
+def create_podcast(feed) -> Podcast:
     with urllib.request.urlopen(feed, context=ssl.create_default_context(cafile=certifi.where())) as response:
         pod = podcastparser.parse(feed, response)
         return Podcast(pod)
 
 
-def make_root_path():
+def make_root_path() -> str:
     fol = os.path.expanduser(CONFIG.root_path)
     if not os.path.exists(fol):
         os.mkdir(fol)
@@ -264,6 +266,8 @@ def main():
         episodes = []
         for podcast in podcasts:
             episodes.extend(podcast.episodes)
+
+        episodes.sort(key=lambda x: x.completed, reverse=True)
 
         with tqdm(total=len(episodes), desc="Episodes", dynamic_ncols=True) as pbar:
             with ThreadPoolExecutor(max_workers=args.threads) as ex:
