@@ -2,6 +2,7 @@ import argparse
 import json
 import logging
 import os
+import pickle
 import ssl
 import tempfile
 import time
@@ -37,12 +38,12 @@ log_config = {
         "console": {
             "formatter": "std_out",
             "class": "logging.StreamHandler",
-            "level": "DEBUG"
+            "level": "INFO"
         }
     },
     "formatters": {
         "std_out": {
-            "format": "%(asctime)s  [%(levelname)s] %(module)s:%(lineno)d %(threadName)s)) -- %(message)s",
+            "format": "%(asctime)s.%(msecs)03d  [%(levelname)s] %(module)s:%(lineno)d %(threadName)s)) -- %(message)s",
             "datefmt": "%d-%m-%Y %I:%M:%S"
         }
     },
@@ -76,6 +77,9 @@ class Podcast:
     def __str__(self):
         return self.title
 
+    def __repr__(self):
+        return str(self)
+
 
 UNITS = {"B": 1, "K": 1024, "M": 1048576}
 
@@ -102,6 +106,7 @@ class PodcastEpisode:
         self.guid: str = ep['guid']
         self._requested_format, self._requested_bitrate = get_req_info()
 
+        self.conversion_filepath = os.path.join("/tmp", f"{self.guid}.{self._requested_format}")
         self.filepath = os.path.join(ROOT_PATH,
                                      self.podcast.title,
                                      f"{self.podcast.title}__{self.released}__{self.name}.{self._requested_format}")
@@ -130,6 +135,16 @@ class PodcastEpisode:
         return self.__repr__()
 
     @staticmethod
+    def pickle_it(episodes: List['PodcastEpisode']):
+        with open('pickled.cache', 'wb') as f:
+            pickle.dump(episodes, f)
+
+    @staticmethod
+    def unpickle_it(path):
+        with open(path, 'rb') as f:
+            return pickle.load(f)
+
+    @staticmethod
     def decode(stuff) -> Union['PodcastEpisode', List['PodcastEpisode']]:
         container = json.loads(stuff)
         if isinstance(container, list):
@@ -144,13 +159,13 @@ class PodcastEpisode:
 
     def _create_folder(self):
         folder = ROOT_PATH + self.podcast.title
-        logging.info(f"Creating folder: {folder}")
         if not os.path.exists(folder):
+            logging.debug(f"Creating folder: {folder}")
             os.mkdir(folder)
 
     def convert(self):
         logging.debug(msg=f"Converting episode: {self}")
-        ffmpeg.input(self.tempfile.name).output(self.filepath,
+        ffmpeg.input(self.tempfile.name).output(self.conversion_filepath,
                                                 format=self._requested_format,
                                                 acodec=format_rectifier[self._requested_format],
                                                 ac=1,
@@ -158,6 +173,9 @@ class PodcastEpisode:
             .run(capture_stdout=True, capture_stderr=True)
         logging.debug(msg=f"Converted episode: {self}")
         os.remove(self.tempfile.name)
+
+        os.replace(self.conversion_filepath, self.filepath)
+
         self.format = self._requested_format
         self.bitrate = self._requested_bitrate
         self._requested_format, self._requested_bitrate = None, None
@@ -186,6 +204,7 @@ class PodcastEpisode:
         self.download()
         self.convert()
         self.completed = True
+        logging.info(f"Completed: {self}")
 
 
 def load_config() -> Dict:
@@ -263,6 +282,7 @@ def main():
             except Exception as e:
                 logging.exception(e)
 
+        podcasts = sorted(podcasts, key=lambda x: x.count, reverse=True)
         episodes = []
         for podcast in podcasts:
             episodes.extend(podcast.episodes)
