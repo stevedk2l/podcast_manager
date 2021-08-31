@@ -200,9 +200,8 @@ class PodcastEpisode:
                                                 audio_bitrate=self._requested_bitrate) \
             .run(capture_stdout=True, capture_stderr=True)
         logging.debug(msg=f"Converted episode: {self}")
-
+        os.remove(self.tempfile)
         os.replace(self.conversion_filepath, self.filepath)
-
         self.format = self._requested_format
         self.bitrate = self._requested_bitrate
         self._requested_format, self._requested_bitrate = None, None
