@@ -1,11 +1,15 @@
 import argparse
+import atexit
 import json
 import logging
 import os
+import pickle
 import ssl
 import tempfile
+import threading
 import time
 import urllib
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import as_completed
 from functools import lru_cache
@@ -37,13 +41,13 @@ log_config = {
         "console": {
             "formatter": "std_out",
             "class": "logging.StreamHandler",
-            "level": "DEBUG"
+            "level": "INFO"
         }
     },
     "formatters": {
         "std_out": {
-            "format": "%(asctime)s  [%(levelname)s] %(module)s:%(lineno)d %(threadName)s)) -- %(message)s",
-            "datefmt": "%d-%m-%Y %I:%M:%S"
+            "format": "%(asctime)s.%(msecs)03d  [%(levelname)s] %(module)s:%(lineno)d %(threadName)s)) -- %(message)s",
+            "datefmt": "%d-%m-%Y %H:%M:%S"
         }
     },
 }
@@ -52,6 +56,8 @@ config.dictConfig(log_config)
 
 CONFIG: Box
 ROOT_PATH: str = ""
+CLEANUPS: []
+CLEANUPS_LOCK: threading.Lock = threading.Lock()
 
 format_rectifier = {"opus": "libopus"}
 
@@ -76,6 +82,9 @@ class Podcast:
     def __str__(self):
         return self.title
 
+    def __repr__(self):
+        return str(self)
+
 
 UNITS = {"B": 1, "K": 1024, "M": 1048576}
 
@@ -91,17 +100,41 @@ def get_req_info() -> Tuple[str, int]:
     return CONFIG.format, parse_size(CONFIG.bitrate)
 
 
+def record_path_for_delete(f):
+    def wrapper():
+        global CLEANUPS
+        to_be_killed_file = f()
+        with CLEANUPS_LOCK:
+            CLEANUPS.append(to_be_killed_file)
+        return to_be_killed_file
+    return wrapper
+
+
+def cleanup():
+    for path in CLEANUPS:
+        try:
+            os.remove(path)
+            logging.debug(f"Deleted: {path}")
+        except:
+            pass
+
+
+@record_path_for_delete
+def get_scratch_file():
+    return os.path.join(tempfile.gettempdir(), f"{uuid.uuid1()}")
+
+
 class PodcastEpisode:
     def __init__(self, podcast, ep):
         self.podcast: Podcast = podcast
         self.name: str = ep['title']
         self.released: int = ep['published']
         self.url: str = ep['enclosures'][0]['url']
-        self.tempfile: tempfile.NamedTemporaryFile = tempfile.NamedTemporaryFile(delete=False)
-        self.tempfile.close()
+        self.tempfile: str = get_scratch_file()
         self.guid: str = ep['guid']
         self._requested_format, self._requested_bitrate = get_req_info()
 
+        self.conversion_filepath = os.path.join("/tmp", f"{self.guid}.{self._requested_format}")
         self.filepath = os.path.join(ROOT_PATH,
                                      self.podcast.title,
                                      f"{self.podcast.title}__{self.released}__{self.name}.{self._requested_format}")
@@ -130,6 +163,16 @@ class PodcastEpisode:
         return self.__repr__()
 
     @staticmethod
+    def pickle_it(episodes: List['PodcastEpisode']):
+        with open('pickled.cache', 'wb') as f:
+            pickle.dump(episodes, f)
+
+    @staticmethod
+    def unpickle_it(path):
+        with open(path, 'rb') as f:
+            return pickle.load(f)
+
+    @staticmethod
     def decode(stuff) -> Union['PodcastEpisode', List['PodcastEpisode']]:
         container = json.loads(stuff)
         if isinstance(container, list):
@@ -144,20 +187,22 @@ class PodcastEpisode:
 
     def _create_folder(self):
         folder = ROOT_PATH + self.podcast.title
-        logging.info(f"Creating folder: {folder}")
         if not os.path.exists(folder):
+            logging.debug(f"Creating folder: {folder}")
             os.mkdir(folder)
 
     def convert(self):
         logging.debug(msg=f"Converting episode: {self}")
-        ffmpeg.input(self.tempfile.name).output(self.filepath,
+        ffmpeg.input(self.tempfile).output(self.conversion_filepath,
                                                 format=self._requested_format,
                                                 acodec=format_rectifier[self._requested_format],
                                                 ac=1,
                                                 audio_bitrate=self._requested_bitrate) \
             .run(capture_stdout=True, capture_stderr=True)
         logging.debug(msg=f"Converted episode: {self}")
-        os.remove(self.tempfile.name)
+
+        os.replace(self.conversion_filepath, self.filepath)
+
         self.format = self._requested_format
         self.bitrate = self._requested_bitrate
         self._requested_format, self._requested_bitrate = None, None
@@ -166,7 +211,7 @@ class PodcastEpisode:
         logging.debug(msg=f"Downloading episode: {self}")
         response = requests.get(self.url, stream=True)
 
-        with open(self.tempfile.name, 'wb') as handle:
+        with open(self.tempfile, 'wb') as handle:
             for data in response.iter_content(chunk_size=102400):
                 handle.write(data)
         logging.debug(msg=f"Downloaded episode: {self}")
@@ -186,6 +231,7 @@ class PodcastEpisode:
         self.download()
         self.convert()
         self.completed = True
+        logging.info(f"Completed: {self}")
 
 
 def load_config() -> Dict:
@@ -201,10 +247,14 @@ def store_config(config):
     CONFIG = Box(config)
 
 
-def create_podcast(feed) -> Podcast:
+PODCAST_LOCK = threading.Lock()
+
+
+def create_podcast(feed, container) -> Podcast:
     with urllib.request.urlopen(feed, context=ssl.create_default_context(cafile=certifi.where())) as response:
         pod = podcastparser.parse(feed, response)
-        return Podcast(pod)
+        with PODCAST_LOCK:
+            container.append(Podcast(pod))
 
 
 def make_root_path() -> str:
@@ -241,6 +291,14 @@ def import_opml(path):
     store_config(existing_config)
 
 
+def generic_threaded_worker(iterable, function, args, description):
+    with tqdm(total=len(iterable), desc=description, dynamic_ncols=True) as pbar:
+        with ThreadPoolExecutor(max_workers=args.threads) as ep_ex:
+            futures = [ep_ex.submit(getattr(x, function), args) for x in iterable]
+            for _ in as_completed(futures):
+                pbar.update(1)
+
+
 def main():
     global CONFIG
     CONFIG = Box(load_config())
@@ -254,15 +312,14 @@ def main():
     while True:
         CONFIG = Box(load_config())
 
-        podcasts = set()
-        for podcast in CONFIG.podcasts:
-            try:
-                podcasts.add(create_podcast(podcast.podcast.feed))
-            except HTTPError:
-                pass
-            except Exception as e:
-                logging.exception(e)
+        podcasts = []
+        with tqdm(total=len(CONFIG.podcasts), desc="Podcasts", dynamic_ncols=True) as pbar:
+            with ThreadPoolExecutor(max_workers=args.threads) as pod_ex:
+                futures = [pod_ex.submit(create_podcast, pod, podcasts) for pod in CONFIG.podcasts]
+                for _ in as_completed(futures):
+                    pbar.update(1)
 
+        podcasts = sorted(podcasts, key=lambda x: x.title, reverse=True)
         episodes = []
         for podcast in podcasts:
             episodes.extend(podcast.episodes)
@@ -270,8 +327,8 @@ def main():
         episodes.sort(key=lambda x: x.completed, reverse=True)
 
         with tqdm(total=len(episodes), desc="Episodes", dynamic_ncols=True) as pbar:
-            with ThreadPoolExecutor(max_workers=args.threads) as ex:
-                futures = [ex.submit(ep.do_it) for ep in episodes]
+            with ThreadPoolExecutor(max_workers=args.threads) as ep_ex:
+                futures = [ep_ex.submit(ep.do_it) for ep in episodes]
                 for _ in as_completed(futures):
                     pbar.update(1)
 
@@ -279,4 +336,5 @@ def main():
 
 
 if __name__ == '__main__':
+    atexit.register(cleanup)
     main()
