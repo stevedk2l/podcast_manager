@@ -76,7 +76,7 @@ class Podcast:
         self.title: str = pod["title"].replace(" ", "_")
         if self in Podcast.instances:
             self.episodes = Podcast.instances[self].episodes
-            self.update_episodes()
+            self.update_episodes(pod["episodes"])
             self.instances.remove(self)  # Gets rid of the original instance with this same name
             self.instances.add(self)  # Add this new instance
         else:
@@ -84,15 +84,15 @@ class Podcast:
             self.instances.add(self)
         logging.debug(f"Imported podcast: {self.title}")
 
-
     def create_episodes(self, parsed_feed) -> List['PodcastEpisode']:
         eps = []
         for ep in parsed_feed:
             eps.append(PodcastEpisode(self, ep))
         return eps
 
-    def update_episodes(self):
-        ...
+    def update_episodes(self, parsed_feed):
+        for x in range(len(self.episodes), len(parsed_feed)):
+            self.episodes.append(PodcastEpisode(self, parsed_feed[x]))
 
     def process_episodes(self):
         for ep in self.episodes:
@@ -338,8 +338,8 @@ def generic_threaded_worker(iterable, function, args, description):
 def get_podcasts():
     try:
         pods = Podcast.unpickle_it()
-        #if pods:
-        #   return pods
+        if len(pods) == len(CONFIG.podcasts):
+            return pods
     except OSError:
         pass
 
