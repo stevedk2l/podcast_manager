@@ -20,6 +20,7 @@ from typing import List
 from typing import Tuple
 from typing import Union
 from urllib.error import HTTPError
+from urllib.error import URLError
 from urllib.request import Request
 from xml.etree import ElementTree
 
@@ -63,16 +64,60 @@ CLEANUPS_LOCK: threading.Lock = threading.Lock()
 format_rectifier = {"opus": "libopus"}
 
 
-class CustomSet(set):
+# https://stackoverflow.com/a/64030200/10619293
+def retry(times, exceptions):
+    """
+    Retry Decorator
+    Retries the wrapped function/method `times` times if the exceptions listed
+    in ``exceptions`` are thrown
+    :param times: The number of times to repeat the wrapped function/method
+    :type times: Int
+    :param Exceptions: Lists of exceptions that trigger a retry attempt
+    :type Exceptions: Tuple of Exceptions
+    """
+
+    def decorator(func):
+        def newfn(*args, **kwargs):
+            attempt = 0
+            while attempt < times:
+                try:
+                    return func(*args, **kwargs)
+                except exceptions:
+                    logging.warning(
+                        'Exception thrown when attempting to run %s, attempt '
+                        '%d of %d' % (func, attempt, times)
+                    )
+                    attempt += 1
+            return func(*args, **kwargs)
+
+        return newfn
+
+    return decorator
+
+
+class PodcastSet(set):
     def __getitem__(self, item):
         for ele in self:
             if ele == item:
                 return ele
 
-class Podcast:
-    instances = CustomSet()
+    def __contains__(self, item):
+        if isinstance(item, str):
+            for ele in self:
+                if ele.title == item:
+                    return True
+            return False
+        else:
+            return super().__contains__(item)
 
-    def __init__(self, pod):
+
+class Podcast:
+    instances = PodcastSet()
+
+    def __init__(self, feed):
+        self.feed = feed
+        pod = self.fetch_feed()
+
         self.title: str = pod["title"].replace(" ", "_")
         if self in Podcast.instances:
             self.episodes = Podcast.instances[self].episodes
@@ -90,8 +135,8 @@ class Podcast:
             eps.append(PodcastEpisode(self, ep))
         return eps
 
-    def update_episodes(self, parsed_feed):
-        for x in range(len(self.episodes), len(parsed_feed)):
+    def update_episodes(self):
+        for x in range(len(self.episodes), len(parsed_feed := self.fetch_feed()['episodes'])):
             self.episodes.append(PodcastEpisode(self, parsed_feed[x]))
 
     def process_episodes(self):
@@ -107,7 +152,17 @@ class Podcast:
     @staticmethod
     def unpickle_it(path: str = 'pickled.cache'):
         with open(path, 'rb') as f:
-            return pickle.load(f)
+            try:
+                return pickle.load(f)
+            except Exception as e:
+                logging.exception(e)
+            return []
+
+    @retry(times=5, exceptions=(URLError, ConnectionRefusedError,))
+    def fetch_feed(self):
+        with urllib.request.urlopen(self.feed, context=ssl.create_default_context(cafile=certifi.where())) as response:
+            pod = podcastparser.parse(self.feed, response)
+            return pod
 
     def __str__(self):
         return self.title
@@ -143,6 +198,7 @@ def record_path_for_delete(f):
         with CLEANUPS_LOCK:
             CLEANUPS.append(to_be_killed_file)
         return to_be_killed_file
+
     return wrapper
 
 
@@ -166,7 +222,13 @@ class PodcastEpisode:
         self.podcast: Podcast = podcast
         self.name: str = ep['title']
         self.released: int = ep['published']
-        self.url: str = ep['enclosures'][0]['url']
+        try:
+            self.url: str = ep['enclosures'][0]['url']
+        except IndexError:
+            try:
+                self.url: str = ep["link"]
+            except Exception as e:
+                raise e
         self.tempfile: str = get_scratch_file()
         self.guid: str = ep['guid']
         self._requested_format, self._requested_bitrate = get_req_info()
@@ -219,10 +281,10 @@ class PodcastEpisode:
     def convert(self):
         logging.debug(msg=f"Converting episode: {self}")
         ffmpeg.input(self.tempfile).output(self.conversion_filepath,
-                                                format=self._requested_format,
-                                                acodec=format_rectifier[self._requested_format],
-                                                ac=1,
-                                                audio_bitrate=self._requested_bitrate) \
+                                           format=self._requested_format,
+                                           acodec=format_rectifier[self._requested_format],
+                                           ac=1,
+                                           audio_bitrate=self._requested_bitrate) \
             .run(capture_stdout=True, capture_stderr=True)
         logging.debug(msg=f"Converted episode: {self}")
 
@@ -287,12 +349,6 @@ def store_config(config):
 PODCAST_LOCK = threading.Lock()
 
 
-def create_podcast(feed) -> Podcast:
-    with urllib.request.urlopen(feed, context=ssl.create_default_context(cafile=certifi.where())) as response:
-        pod = podcastparser.parse(feed, response)
-        return Podcast(pod)
-
-
 def make_root_path() -> str:
     fol = os.path.expanduser(CONFIG.root_path)
     if not os.path.exists(fol):
@@ -327,32 +383,31 @@ def import_opml(path):
     store_config(existing_config)
 
 
-def generic_threaded_worker(iterable, function, args, description):
-    with tqdm(total=len(iterable), desc=description, dynamic_ncols=True) as pbar:
-        with ThreadPoolExecutor(max_workers=args.threads) as ep_ex:
-            futures = [ep_ex.submit(getattr(x, function), args) for x in iterable]
-            for _ in as_completed(futures):
-                pbar.update(1)
-
-
 def get_podcasts():
     try:
-        pods = Podcast.unpickle_it()
+        pods: PodcastSet[Podcast] = Podcast.unpickle_it()
+
+        Podcast.instances = pods
+        for p in Podcast.instances:
+            p.update_episodes()
         if len(pods) == len(CONFIG.podcasts):
             return pods
     except OSError:
-        pass
+        pods = PodcastSet()
 
-    podcasts = set()
     for podcast in CONFIG.podcasts:
-        try:
-            podcasts.add(create_podcast(podcast.podcast.feed))
-        except HTTPError:
-            pass
-        except Exception as e:
-            logging.exception(e)
+        if podcast.podcast.name not in Podcast.instances:
+            try:
+                pods.add(Podcast(podcast.podcast.feed))
+            except HTTPError:
+                pass
+            except Exception as e:
+                logging.exception(e)
+        else:
+            # Just to make it clear we do nothing here
+            continue
 
-    return podcasts
+    return pods
 
 
 def main():
@@ -369,7 +424,7 @@ def main():
         CONFIG = Box(load_config())
 
         podcasts = get_podcasts()
-        
+
         podcasts = sorted(podcasts, key=lambda x: x.title, reverse=True)
         episodes = []
         for podcast in podcasts:
