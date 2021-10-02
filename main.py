@@ -43,12 +43,12 @@ log_config = {
         "console": {
             "formatter": "std_out",
             "class": "logging.StreamHandler",
-            "level": "DEBUG"
+            "level": "INFO"
         }
     },
     "formatters": {
         "std_out": {
-            "format": "%(asctime)s.%(msecs)03d  [%(levelname)s] %(module)s:%(lineno)d %(threadName)s)) -- %(message)s",
+            "format": "%(asctime)s.%(msecs)03d  [%(levelname)8s] [%(threadName)s] -- %(message)s",
             "datefmt": "%d-%m-%Y %H:%M:%S"
         }
     },
@@ -121,7 +121,7 @@ class Podcast:
         self.title: str = pod["title"].replace(" ", "_")
         if self in Podcast.instances:
             self.episodes = Podcast.instances[self].episodes
-            self.update_episodes(pod["episodes"])
+            self.update_episodes()
             self.instances.remove(self)  # Gets rid of the original instance with this same name
             self.instances.add(self)  # Add this new instance
         else:
@@ -233,12 +233,13 @@ class PodcastEpisode:
         self.guid: str = ep['guid']
         self._requested_format, self._requested_bitrate = get_req_info()
 
-        self.conversion_filepath = os.path.join("/tmp", f"{self.guid}.{self._requested_format}")
+        self.conversion_filepath = os.path.join("/tmp", f"{self.safe_name()}.{self._requested_format}")
         self.filepath = os.path.join(ROOT_PATH,
                                      self.podcast.title,
                                      f"{self.podcast.title}__{self.released}__{self.name}.{self._requested_format}")
 
         self.completed = os.path.exists(self.filepath)
+        self.conv_duration = 0
 
         if self.completed:
             self.format, self.bitrate = self.collect_audio_metadata()
@@ -246,18 +247,32 @@ class PodcastEpisode:
             if not ((self.format.lower() == req_format.lower()) or (
                     req_bitrate * 0.9 <= self.bitrate <= req_bitrate * 1.1)):
                 self.completed = False
-                logging.info(f"Marking: {self} as not complete")
+                logging.debug(f"Marking: {self} as not complete")
         else:
             self.format, self.bitrate = None, None
 
     def __hash__(self):
         return hash(self.guid)
 
+    @lru_cache(maxsize=1)
+    def short_title(self):
+        strings = self.podcast.title.split("_")
+        st = ""
+        for string in strings:
+            st += string[0]
+        return st
+
     def __repr__(self):
-        return f"{self.podcast.title} -- {self.name}"
+        #return f"{self.short_title()} -- {self.name}"[-30:]
+        return f"{self.name}"
 
     def __str__(self):
         return self.__repr__()
+
+    def safe_name(self):
+        title = self.podcast.title.replace(" ", "")
+        name = self.name.replace(" ", "")
+        return f"{title}_{name}"
 
     @staticmethod
     def decode(stuff) -> Union['PodcastEpisode', List['PodcastEpisode']]:
@@ -279,14 +294,16 @@ class PodcastEpisode:
             os.mkdir(folder)
 
     def convert(self):
-        logging.debug(msg=f"Converting episode: {self}")
+        logging.debug(msg=f"Converting : {self}")
+        start = time.time()
         ffmpeg.input(self.tempfile).output(self.conversion_filepath,
                                            format=self._requested_format,
                                            acodec=format_rectifier[self._requested_format],
                                            ac=1,
                                            audio_bitrate=self._requested_bitrate) \
-            .run(capture_stdout=True, capture_stderr=True)
-        logging.debug(msg=f"Converted episode: {self}")
+            .run(capture_stdout=True, capture_stderr=True, overwrite_output=True)
+        duration = time.time() - start
+        logging.info(msg=f"Converted   : {self} - Took {duration} seconds")
 
         os.remove(self.tempfile)
         logging.debug("Removed the downloaded temp file")
@@ -306,13 +323,13 @@ class PodcastEpisode:
                 pass
 
     def download(self):
-        logging.debug(msg=f"Downloading episode: {self}")
         response = requests.get(self.url, stream=True)
+        logging.debug(msg=f"Downloading : {self}")
 
         with open(self.tempfile, 'wb') as handle:
             for data in response.iter_content(chunk_size=102400):
                 handle.write(data)
-        logging.debug(msg=f"Downloaded episode: {self}")
+        logging.info(msg=f"Downloaded  : {self}")
 
     def collect_audio_metadata(self) -> Tuple[str, int]:
         try:
@@ -330,7 +347,7 @@ class PodcastEpisode:
         self.convert()
         self.completed = True
         self.cleanup_temps()
-        logging.info(f"Completed: {self}")
+        logging.info(f"Completed   : {self}")
 
 
 def load_config() -> Dict:
@@ -344,9 +361,6 @@ def store_config(config):
 
     global CONFIG
     CONFIG = Box(config)
-
-
-PODCAST_LOCK = threading.Lock()
 
 
 def make_root_path() -> str:
@@ -384,6 +398,7 @@ def import_opml(path):
 
 
 def get_podcasts():
+
     try:
         pods: PodcastSet[Podcast] = Podcast.unpickle_it()
 
@@ -424,6 +439,9 @@ def main():
         CONFIG = Box(load_config())
 
         podcasts = get_podcasts()
+        names = [podcast.podcast.name for podcast in CONFIG.podcasts]
+        # Filter out from potentially unpickled data, incase yaml file has changed between now and when data was pickled
+        podcasts = [podcast for podcast in podcasts if podcast.title in names]
 
         podcasts = sorted(podcasts, key=lambda x: x.title, reverse=True)
         episodes = []
@@ -431,12 +449,11 @@ def main():
             episodes.extend(podcast.episodes)
 
         episodes.sort(key=lambda x: x.completed, reverse=True)
+        to_be_processed = [ep for ep in episodes if not ep.completed]
+        logging.info(f"{len(to_be_processed)} to processes. Already completed: {len(episodes) - len(to_be_processed)}")
 
-        with tqdm(total=len(episodes), desc="Episodes", dynamic_ncols=True) as pbar:
-            with ThreadPoolExecutor(max_workers=args.threads) as ep_ex:
-                futures = [ep_ex.submit(ep.do_it) for ep in episodes]
-                for _ in as_completed(futures):
-                    pbar.update(1)
+        with ThreadPoolExecutor(max_workers=args.threads, thread_name_prefix="TPE") as ep_ex:
+            [ep_ex.submit(ep.do_it) for ep in episodes]
 
         time.sleep(CONFIG.search_interval)
 
